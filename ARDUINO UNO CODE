@@ -1,0 +1,398 @@
+ARDUINO UNO CODE
+#include <String.h>
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(3, 4, 5, 6, 7, 8);//RS,EN,D4,D5,D6,D7
+#include <SoftwareSerial.h>
+SoftwareSerial espSerial =  SoftwareSerial(0,1);      // arduino RX pin=2  arduino TX pin=3    connect the arduino RX pin to esp8266 module TX pin   -  connect the arduino TX pin to esp8266 module RX pin
+
+String apiKey = "BQMGQ51ELUPLY10R";     // channel’s thingspeak WRITE API key
+String ssid="DEMO";    // hotspot SSID
+String password ="DEMO123456";  // hotspot network password
+boolean DEBUG=true;
+int led=13;
+
+char str[25];
+int i=0,temp1=0,j=0;
+
+const int analogInPin0 = A5;  // Analog input pin that the potentiometer is attached to
+const int analogInPin1 = A3;
+const int analogInPin2 = A0;
+
+int RED2    = 9;   
+int BLUE2  = 11;      
+int YELLOW2 = 10;
+
+int RR=0,YY=0,BB=0;
+int W  =0;
+
+int REDR = 0;   
+int BLUEB = 0;      
+int YELLOWY=0;
+
+int x1=0;
+int  y1=0;
+int  z1=0;
+        
+void setup() 
+{
+   DEBUG=true;     // enable debug serial
+   
+   lcd.begin(16, 2); 
+   // Serial.begin(9600);
+    pinMode(RED2, OUTPUT);
+    pinMode(BLUE2, OUTPUT);
+    pinMode(YELLOW2, OUTPUT);
+    digitalWrite (RED2,HIGH);
+    digitalWrite (BLUE2,HIGH);
+    digitalWrite (YELLOW2,HIGH);
+   lcd.setCursor(0, 0); // top left
+    lcd.print("UNDERGROUND CABLE    ");
+    lcd.setCursor(0, 1);
+    lcd.print("FAULT DETECTION ");
+    delay(3000);
+    lcd.clear();
+   lcd.setCursor(0, 0);
+    lcd.print("CONNECTING WI-FI");
+   
+ espSerial.begin(9600);  // enable software serial
+  delay(500);
+  
+ espSerial.println("AT+CWMODE=1");   // set esp8266 as client
+  showResponse(3000);
+
+  espSerial.println("AT+CWJAP=\""+ssid+"\",\""+password+"\""); 
+  showResponse(8000);
+   lcd.clear();
+   lcd.setCursor(0, 0);
+   lcd.print("WI-FI CONNECTED");
+   delay(1500);
+   
+
+   if (DEBUG)  Serial.println("Setup completed");
+   lcd.clear();
+
+    lcd.setCursor(0, 0); // top left
+    lcd.print("R=0 Km");
+    lcd.setCursor(9, 0); // top left
+    lcd.print("Y=0 Km");
+    lcd.setCursor(0, 1); // top left
+    lcd.print("B=0 Km");
+   // delay(2000);
+ }
+showResponce
+   void showResponse(int waitTime)
+{
+    long t=millis();
+    char c;
+    while (t+waitTime>millis())
+    {
+      if (espSerial.available())
+      {
+        c=espSerial.read();
+        if (DEBUG) Serial.print(c);
+      }
+    }
+                   
+}
+
+
+
+boolean thingSpeakWrite(float value1, float value2,float value3)
+{
+  String cmd = "AT+CIPSTART=\"TCP\",\"";                  // TCP connection
+  cmd += "184.106.153.149";                               // api.thingspeak.com
+  cmd += "\",80";
+  espSerial.println(cmd);
+  if (DEBUG) Serial.println(cmd);
+  if(espSerial.find("Error"))
+  {
+    if (DEBUG) Serial.println("AT+CIPSTART error");
+    return false;
+  }
+ 
+  String getStr = "GET /update?api_key=";   // prepare GET string
+  getStr += apiKey;
+  
+  getStr +="&field1=";
+  getStr += String(value1);
+  getStr +="&field2=";
+  getStr += String(value2);
+  getStr +="&field3=";
+  getStr += String(value3);
+
+
+  getStr += "\r\n\r\n";
+
+  // send data length
+  cmd = "AT+CIPSEND=";
+  cmd += String(getStr.length());
+  espSerial.println(cmd);
+  if (DEBUG)  Serial.println(cmd);
+  
+  delay(100);
+  if(espSerial.find(">")){
+    espSerial.print(getStr);
+    if (DEBUG)  Serial.print(getStr);
+  }
+  else{
+    espSerial.println("AT+CIPCLOSE");
+    // alert user
+    if (DEBUG)   Serial.println("AT+CIPCLOSE");
+    return false;
+  }
+  return true;
+}
+
+
+
+
+void data()
+{
+ if (isnan(x1) || isnan(y1))
+ {
+     if (DEBUG) Serial.println("Failed to read from sensor");
+     }
+     else
+     {
+          if (DEBUG)  Serial.println("Ph-R="+String(x1)+"");
+          if (DEBUG) Serial.println("Ph-Y="+String(y1)+"");
+          if (DEBUG)  Serial.println("Ph-B="+String(z1)+"");
+        
+           thingSpeakWrite(x1,y1,z1);                                      // Write values to thingspeak
+      }
+             
+  // thingspeak needs 15 sec delay between updates,     
+  delay(16000);
+}
+
+void RED1()
+{
+ 
+  if(RR==0)
+  {
+     REDR =    analogRead(analogInPin0); 
+     if(REDR>=850 && REDR<=856 )
+   {
+    
+   digitalWrite (RED2,LOW);
+    Serial.println("R=30Km");
+    lcd.setCursor(0, 0); // top left
+    lcd.print("R=30Km");
+    x1 = 30;
+    RR=1;
+   }
+     
+ else if(REDR>=820 && REDR<=825 )
+   {
+    
+   digitalWrite (RED2,LOW);
+    Serial.println("R=25Km");
+    lcd.setCursor(0, 0); // top left
+    lcd.print("R=25Km");
+    x1 = 25;
+    RR=1;
+   }
+   else
+   if(REDR>=765 && REDR<=770 )
+   {
+     Serial.println("R=20Km");
+     lcd.setCursor(0, 0); // top left
+    lcd.print("R=20Km");
+     digitalWrite (RED2,LOW);
+     x1 = 20;
+     RR=1;
+   }
+   else
+   if(REDR>=670 && REDR<=695 )
+   {
+    Serial.println("R=15Km");
+    lcd.setCursor(0, 0); // top left
+    lcd.print("R=15Km");
+     digitalWrite (RED2,LOW);
+     x1 = 15;
+     RR=1;
+   }
+   else
+   if(REDR>=510 && REDR<=515 )
+   {
+     Serial.println("R=10Km");
+     lcd.setCursor(0, 0); // top left
+    lcd.print("R=10Km");
+     digitalWrite (RED2,LOW);
+     x1 = 10;
+     RR=1;
+   }
+   else
+   if( REDR<=400 )
+   {
+     Serial.println("R=5Km");
+     lcd.setCursor(0, 0); // top left
+    lcd.print("R=5Km");
+     digitalWrite (RED2,LOW);
+     x1 = 5;
+     RR=1;
+   }
+  
+  }
+}
+void YELLOW1()
+{
+  
+  if(YY==0)
+  { 
+    YELLOWY =  analogRead(analogInPin1); 
+    if(YELLOWY>=850 && YELLOWY<=856 )
+   {
+     Serial.println("Y=30Km");
+    lcd.setCursor(9, 0); // top left
+    lcd.print("Y=30Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 =30;
+    YY=1;
+  
+   }
+ else if(YELLOWY>=820 && YELLOWY<=825 )
+   {
+    Serial.println("Y=25Km");
+    lcd.setCursor(9, 0); // top left
+    lcd.print("Y=25Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 = 25;
+    YY=1;
+   }
+   else
+   if(YELLOWY>=765 && YELLOWY<=770 )
+   {
+     Serial.println("Y=20Km");
+     lcd.setCursor(9, 0); // top left
+    lcd.print("Y=20Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 = 20;
+    YY=1;
+   }
+   else
+   if(YELLOWY>=670 && YELLOWY<=695 )
+   {
+    Serial.println("Y=15Km");
+
+   lcd.setCursor(9, 0); // top left
+    lcd.print("Y=15Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 = 15;
+    YY=1;
+    }
+   else
+   if(YELLOWY>=510 && YELLOWY<=515 )
+   {
+     Serial.println("Y=10Km");
+     lcd.setCursor(9, 0); // top left
+    lcd.print("Y=10Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 = 10;
+    YY=1;
+   }
+   else
+   if(YELLOWY<=400 )
+   {
+     Serial.println("Y=5Km");
+     lcd.setCursor(9, 0); // top left
+    lcd.print("Y=5Km");
+    digitalWrite (YELLOW2,LOW);
+    y1 = 5;
+    YY=1;
+   }
+  
+  }
+}
+void BLUE1()
+{
+     
+   if(BB==0)
+   { 
+    BLUEB = analogRead(analogInPin2);
+    if(BLUEB>=850&& BLUEB<=856 )
+   {
+    Serial.println("B=30Km");
+    lcd.setCursor(0, 1); // top left
+    lcd.print("B=30Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 30;
+    BB=1;
+   }
+   else if(BLUEB>=820 && BLUEB<=825 )
+   {
+    Serial.println("B=25Km");
+    lcd.setCursor(0, 1); // top left
+    lcd.print("B=25Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 25;
+    BB=1;
+   }
+   else
+   if(BLUEB>=765 && BLUEB<=770 )
+   {
+     Serial.println("B=20Km");
+     lcd.setCursor(0, 1); // top left
+    lcd.print("B=20Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 20;
+    BB=1;
+   }
+   else
+   if(BLUEB>=670 && BLUEB<=695 )
+   {
+    Serial.println("B=15Km");
+    lcd.setCursor(0, 1); // top left
+    lcd.print("B=15Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 15;
+    BB=1;
+   }
+   else
+   if(BLUEB>=510 && BLUEB<=515 )
+   {
+     Serial.println("B=10Km");
+     lcd.setCursor(0, 1); // top left
+    lcd.print("B=10Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 10;
+    BB=1;
+   }
+   else
+   if(BLUEB<=400 )
+   {
+     Serial.println("B=5Km");
+     lcd.setCursor(0, 1); // top left
+    lcd.print("B=5Km");
+    digitalWrite (BLUE2,LOW);
+    z1 = 5;
+    BB=1;
+   }
+   
+   }
+}
+void loop() 
+{
+    REDR =    analogRead(analogInPin0);  
+    YELLOWY =  analogRead(analogInPin1);  
+    BLUEB = analogRead(analogInPin2); 
+    Serial.println( REDR);
+  RED1();
+  YELLOW1();
+ BLUE1();  
+     
+   if(W>55)
+   {
+    lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("Uploading.....");
+  data();
+     W=0;
+   lcd.clear();
+   } 
+   delay(1000); 
+    W++;  
+     RED1();
+  YELLOW1();   
+ BLUE1(); 
+ }
